@@ -19,7 +19,7 @@ A high-speed real-time object detection framework optimized for NVIDIA GPUs (esp
 ### ⚙️ Setup
 1.  **Dependencies**:
     ```bash
-    pip install ultralytics mss opencv-python pywin32 keyboard numpy
+    pip install ultralytics mss opencv-python pywin32 keyboard numpy wheel
     ```
     ```bash
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
