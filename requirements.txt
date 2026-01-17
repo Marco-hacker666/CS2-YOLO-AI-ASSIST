@@ -1,0 +1,7 @@
+numpy==1.24.3
+opencv-python
+ultralytics
+mss
+keyboard
+pywin32
+psutil
