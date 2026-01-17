@@ -57,7 +57,7 @@ CLASS_HEAD = 1
 # 效能優化
 TARGET_FPS = 300         # 🔥 極限幀率
 FRAME_TIME = 1 / TARGET_FPS
-SKIP_FRAME_VISUALIZATION = True  # 🔥 True = 不顯示視窗 (再提升 30% FPS)
+SKIP_FRAME_VISUALIZATION = True  # 🔥 True = 不顯示預覽視窗 (再提升 30% FPS)
 ENABLE_PERFORMANCE_MONITORING = True  # 🔥 顯示詳細效能分析
 REDUCE_DEBUG_OUTPUT = True  # 🔥 減少 print 輸出
 
@@ -761,5 +761,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
