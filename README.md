@@ -25,7 +25,7 @@ A high-speed real-time object detection framework optimized for NVIDIA GPUs (esp
 3.  **Run**: Execute `python main.py` with Administrative privileges.
 
 ---
-
+##Rember to Install Pytorch to your computer
 <a name="中文說明"></a>
 ## 🇹🇼 中文說明
 
