@@ -14,7 +14,7 @@ MODEL_PATH = r'D:\AI\CS2.pt'  # 🔥 使用 TensorRT engine
 
 SCREEN_WIDTH = 3440
 SCREEN_HEIGHT = 1440
-DETECTION_SIZE = 640  # 🔥 改回你原本的 928 (更大視野，但慢 50%)
+DETECTION_SIZE = 640  # 🔥 AI偵測大小(最大640)
 
 # 平滑移動參數（取代 PID）
 SMOOTHING_FACTOR = 0.3  # 稍微提高反應速度
@@ -26,7 +26,7 @@ TARGET_HISTORY_SIZE = 3  # 🔥 減少到 3 (降低延遲)
 PREDICTION_WEIGHT = 0.4  # 增加預測權重
 
 # 瞄準設定
-CONF_THRESHOLD = 0.5     # 🔥 降低到 0.5 (更靈敏，但可能誤判)
+CONF_THRESHOLD = 0.6     # 🔥 信任度:降低到 0.5 (更靈敏，但可能誤判)
 IOU_THRESHOLD = 0.5      # 🔥 NMS IoU 閾值
 MAX_LOCK_DISTANCE = 280  # 稍微增加鎖定範圍
 
@@ -38,9 +38,9 @@ TRIGGER_KEY = win32con.VK_LBUTTON  # 🔥 左鍵開火（可改成其他鍵）
 
 # 🔥 點射控制（防止連發失控）
 BURST_MODE = True           # True = 點射模式, False = 持續開火
-BURST_SHOTS = 2             # 每次點射發射數（建議 3-5）
-BURST_INTERVAL_MS = 200      # 每次點射間隔（毫秒）
-SHOT_DURATION_MS = 80       # 單次射擊持續時間（毫秒，控制射速）
+BURST_SHOTS = 3             # 每次點射發射數（建議 3-5）
+BURST_INTERVAL_MS = 20      # 每次點射間隔（毫秒）
+SHOT_DURATION_MS = 50       # 單次射擊持續時間（毫秒，控制射速）
 
 # 🔥 後坐力補償（實驗性）
 RECOIL_COMPENSATION = True  # True = 啟用下壓補償
@@ -761,4 +761,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
