@@ -21,6 +21,10 @@ A high-speed real-time object detection framework optimized for NVIDIA GPUs (esp
     ```bash
     pip install ultralytics mss opencv-python pywin32 keyboard numpy
     ```
+    ```bash
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    ```
+    Change your pytorch for your GPU!
 2.  **Model**: Place your `best.engine` or `best.pt` in the root directory.
 3.  **Run**: Execute `python main.py` with Administrative privileges.
 
