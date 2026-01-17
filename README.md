@@ -17,7 +17,11 @@ A high-speed real-time object detection framework optimized for NVIDIA GPUs (esp
 * **Smart ROI**: Only processes a specific Region of Interest (ROI) to save GPU resources for the actual game.
 
 ### ⚙️ Setup
-1.  **Dependencies**:
+1.  **Requirements**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+2.  **Dependencies**:
     ```bash
     pip install ultralytics mss opencv-python pywin32 keyboard numpy wheel
     ```
@@ -25,8 +29,8 @@ A high-speed real-time object detection framework optimized for NVIDIA GPUs (esp
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
     ```
     Change your pytorch for your GPU!
-2.  **Model**: Place your `CS2.pt` in the root directory.
-3.  **Run**: Execute `python main.py` with Administrative privileges.
+3.  **Model**: Place your `CS2.pt` in the root directory.
+4.  **Run**: Execute `python main.py` with Administrative privileges.
 
 ---
 ##Rember to Install Pytorch to your computer
@@ -42,7 +46,12 @@ A high-speed real-time object detection framework optimized for NVIDIA GPUs (esp
 * **局部區域偵測**: 僅針對螢幕中心區域進行擷取 (ROI)，節省 GPU 效能以維持遊戲幀率。
 
 ### ⚙️ 安裝與使用
-1.  **安裝必要套件**:
+1.  **模組需求**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+2.  **安裝必要套件**:
     ```bash
     pip install ultralytics mss opencv-python pywin32 keyboard numpy
     ```
@@ -50,8 +59,8 @@ A high-speed real-time object detection framework optimized for NVIDIA GPUs (esp
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
     ```
     自行調整Pytorch版本，以適用於你的GPU!
-2.  **模型準備**: 將你的 `CS2.pt` 模型檔案放入專案根目錄。
-3.  **啟動**: 以**管理員權限**執行 `python main.py`。
+3.  **模型準備**: 將你的 `CS2.pt` 模型檔案放入專案根目錄。
+4.  **啟動**: 以**管理員權限**執行 `python main.py`。
 
 ---
 
