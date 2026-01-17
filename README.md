@@ -1,6 +1,5 @@
-# CS2-YOLO-AI-ASSIST
-# ⚡ YOLO Real-time Vision Assistant (High Performance)
-### ⚡ YOLO 即時視覺輔助系統 (高性能版)
+# ⚡ YOLO Real-time Vision Framework (Universal Version)
+### ⚡ YOLO 即時視覺辨識架構 (通用加速版)
 
 [English](#english) | [中文說明](#中文說明)
 
@@ -9,67 +8,61 @@
 <a name="english"></a>
 ## 🌐 English Description
 
-This project is a high-performance, low-latency object detection and aiming assistance framework. It demonstrates the integration of **YOLOv8/TensorRT**, **DXCam**, and **Win32API** to achieve sub-5ms latency in real-time computer vision tasks.
+A high-speed real-time object detection framework optimized for NVIDIA GPUs (especially RTX 40/50 series). This project focuses on **stability**, **smooth tracking**, and **minimal CPU overhead** using YOLOv8 and TensorRT.
 
 ### 🚀 Key Features
-* **Ultra-Low Latency Capture**: Powered by [DXCam](https://github.com/ra1nty/DXCam) (Desktop Duplication API).
-* **TensorRT Acceleration**: Supports `.engine` format for maximum GPU inference speed (FP16).
-* **PID/Smooth Control**: Advanced smoothing algorithms for human-like cursor movement.
-* **Optimized Pipeline**: Zero-copy RGB data flow from capture to inference.
+* **Universal Capture Engine**: Supports multi-mode screen capture (MSS/Win32) for maximum compatibility across different Windows environments.
+* **PID Stabilization**: Implements Proportional-Integral-Derivative (PID) control logic to eliminate cursor jitter and "overshooting."
+* **TensorRT Ready**: Optimized for `.engine` models, achieving consistent sub-5ms inference times.
+* **Smart ROI**: Only processes a specific Region of Interest (ROI) to save GPU resources for the actual game.
 
-### ⚙️ Installation
-1.  **Install dependencies**:
+### ⚙️ Setup
+1.  **Dependencies**:
     ```bash
-    pip install ultralytics dxcam opencv-python pywin32 keyboard numpy
+    pip install ultralytics mss opencv-python pywin32 keyboard numpy
     ```
-2.  **Export Model to TensorRT**:
-    ```bash
-    yolo export model=your_model.pt format=engine device=0 half=True
-    ```
-3.  **Run**: `python main.py`
+2.  **Model**: Place your `best.engine` or `best.pt` in the root directory.
+3.  **Run**: Execute `python main.py` with Administrative privileges.
 
 ---
 
 <a name="中文說明"></a>
 ## 🇹🇼 中文說明
 
-本專案是一個針對高性能、低延遲目標偵測與瞄準輔助的技術架構。主要展示如何整合 **YOLOv8/TensorRT**、**DXCam** 與 **Win32API**，在即時電腦視覺任務中實現低於 5ms 的極低延遲。
+本專案是一個針對 NVIDIA GPU (特別是 RTX 40/50 系列) 優化的即時目標偵測架構。核心開發重點在於**操作穩定性**、**平滑追蹤**以及**極低的 CPU 佔用率**。
 
 ### 🚀 核心優勢
-* **極速螢幕擷取**: 使用 [DXCam](https://github.com/ra1nty/DXCam) (Windows 桌面重複 API)，遠快於 MSS 或 OpenCV。
-* **TensorRT 硬體加速**: 支援 `.engine` 模型格式，充分發揮 NVIDIA GPU 的 FP16 推理性能。
-* **平滑軌跡控制**: 內建平滑演算法，模擬真實人類滑鼠移動軌跡，降低「非人感」。
-* **效能優化工作流**: 擷取後的 RGB 數據直接餵入 AI 模型，減少記憶體複製與色彩空間轉換的開銷。
+* **通用擷取引擎**: 支援 MSS/Win32 等多種擷取方式，確保在不同 Windows 版本與遊戲環境下都能穩定運作。
+* **PID 穩定演算法**: 引入 PID 控制邏輯，有效解決準心跳動與「過度修正」問題，提供絲滑的吸附感。
+* **TensorRT 深度優化**: 專為 `.engine` 格式設計，確保在 3440x1440px 等高解析度下仍能保持極低延遲。
+* **局部區域偵測**: 僅針對螢幕中心區域進行擷取 (ROI)，節省 GPU 效能以維持遊戲幀率。
 
-### ⚙️ 安裝環境
+### ⚙️ 安裝與使用
 1.  **安裝必要套件**:
     ```bash
-    pip install ultralytics dxcam opencv-python pywin32 keyboard numpy
+    pip install ultralytics mss opencv-python pywin32 keyboard numpy
     ```
-2.  **轉換模型至 TensorRT (推薦)**:
-    ```bash
-    yolo export model=your_model.pt format=engine device=0 half=True
-    ```
-3.  **啟動程式**: 執行 `python main.py`
+2.  **模型準備**: 將你的 `best.engine` 模型檔案放入專案根目錄。
+3.  **啟動**: 以**管理員權限**執行 `python main.py`。
 
 ---
 
-## 📊 Performance Benchmark / 效能基準
-Tested on **RTX 5080** @ 3440 x 1440:
-
-| Stage / 階段 | Latency / 延遲 | Status |
-| :--- | :--- | :--- |
-| **Capture / 擷取** | ~1.2 ms | ✅ |
-| **Inference / 推理** | ~1.8 ms | ✅ |
-| **Total / 總延遲** | **< 4 ms** | 🚀 |
-
 ## 🎮 Controls / 操作方式
-* **Hold [X]**: Activate Aim Assist / 按住 [X] 開啟瞄準輔助
-* **Press [Q]**: Quit / 按 [Q] 安全退出系統
+| Key / 按鍵 | Action / 功能 |
+| :--- | :--- |
+| **Hold [X]** | Toggle Tracking / 按住開啟瞄準輔助 |
+| **Press [C]** | Toggle TriggerBot / 切換自動開火模式 |
+| **Press [Q]** | Emergency Exit / 安全退出程式 |
+
+## 📊 Performance Benchmark / 效能表現
+*Tested on RTX 5080 @ 21:9 Ultrawide*
+* **Inference**: ~1.5ms - 2.5ms
+* **Capture**: ~3ms (MSS Optimized)
+* **Overall Latency**: Ultra-low input lag
 
 ## ⚠️ Disclaimer / 免責聲明
-This software is for **educational and research purposes only**. The author is not responsible for any bans or legal issues caused by using this in online games.
-本軟體僅供**教育與學術研究用途**（例如測試電腦視覺延遲、人機互動等）。作者不承擔任何因在線上遊戲中使用此軟體而導致的封號或法律責任。
+This project is for **technical research and educational purposes** only. It demonstrates the application of PID controllers and AI inference in real-time environments. The author does not condone or support any use in competitive online gaming.
+本專案僅供**技術研究與教育用途**，旨在展示 PID 控制器與 AI 推理在即時環境中的應用。作者不鼓勵、亦不支援任何違反遊戲公平性的行為。
 
 ## 📄 License
-[MIT License](LICENSE)a ez aim bot
+[MIT License](LICENSE)
