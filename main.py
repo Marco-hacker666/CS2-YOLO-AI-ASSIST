@@ -9,7 +9,7 @@ from collections import deque
 import ctypes
 
 # ================= 參數設定 =================
-MODEL_PATH = r'D:\AI\CS2.engine'  # 🔥 使用 TensorRT engine
+MODEL_PATH = r'D:\AI\CS2.pt'  # 🔥 使用 TensorRT engine
 # 如果是 .pt 模型會自動轉換，也可以直接用 .engine
 
 SCREEN_WIDTH = 3440
@@ -761,3 +761,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
