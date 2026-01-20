@@ -30,7 +30,7 @@ A high-speed real-time object detection framework optimized for NVIDIA GPUs (esp
     ```
     Change your pytorch for your GPU!
 3.  **Model**: Place your `CS2.pt` in the root directory.
-4.  **Run**: Execute `python main.py` with Administrative privileges.
+4.  **Run**: Execute `python gui.py` with Administrative privileges.
 
 ---
 ##Rember to Install Pytorch to your computer
@@ -60,7 +60,7 @@ A high-speed real-time object detection framework optimized for NVIDIA GPUs (esp
     ```
     自行調整Pytorch版本，以適用於你的GPU!
 3.  **模型準備**: 將你的 `CS2.pt` 模型檔案放入專案根目錄。
-4.  **啟動**: 以**管理員權限**執行 `python main.py`。
+4.  **啟動**: 以**管理員權限**執行 `python gui.py`。
 
 ---
 
