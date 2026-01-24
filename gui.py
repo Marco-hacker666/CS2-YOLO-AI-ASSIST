@@ -377,7 +377,7 @@ def check_torch_installation():
                 except Exception:
                     pass
                 cmd = [sys.executable, "-m", "pip", "install", "torch", "torchvision",
-                       "--index-url", "https://download.pytorch.org/whl/cu121"]
+                       "--index-url", "https://download.pytorch.org/whl/cu128"]
             else:
                 cmd_uninstall = [sys.executable, "-m", "pip", "uninstall", "-y", "torchaudio"]
                 try:
