@@ -1,612 +1,903 @@
-# 完整版 AI 瞄準系統 GUI - 帶自動優化
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-import json
+import threading
 import os
 import sys
+import subprocess
+import importlib.util
+import json
+import trigger
 
-# ==================== 配置類別 ====================
-class Config:
-    def __init__(self):
-        # 模型設定
-        self.MODEL_PATH = r'D:\AI\CS2.pt'
-        
-        # 螢幕設定
-        self.SCREEN_WIDTH = 3440
-        self.SCREEN_HEIGHT = 1440
-        self.DETECTION_SIZE = 640
-        
-        # 瞄準設定
-        self.AIM_ENABLED = True
-        self.AIM_HEIGHT = 0.0  # 0.0=頭, 0.5=胸, 1.0=腰
-        self.SMOOTHING_FACTOR = 0.85
-        self.MAX_MOVE_SPEED = 300
-        self.MOUSE_JITTER = 0.3
-        self.MAX_LOCK_DISTANCE = 300
-        
-        # Trigger Bot
-        self.ENABLE_TRIGGER_BOT = False
-        self.TRIGGER_DELAY_MS = 500
-        self.TRIGGER_RADIUS = 10
-        
-        # 壓槍
-        self.RECOIL_COMPENSATION = True
-        self.RECOIL_STRENGTH = 3
-        
-        # 快捷鍵
-        self.AIM_TOGGLE_KEY = 'x'
-        self.TRIGGER_TOGGLE_KEY = 'c'
-        self.EXIT_KEY = 'q'
-        
-        # 視覺
-        self.SKIP_FRAME_VISUALIZATION = False
-        self.REDUCE_DEBUG_OUTPUT = True
-        self.SHOW_FOV_CIRCLE = True
-        
-        # 效能
-        self.TARGET_FPS = 300
-        
-    def save(self, filepath='config.json'):
-        config_dict = {}
-        for key, value in self.__dict__.items():
-            if not key.startswith('_'):
-                config_dict[key] = value
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(config_dict, f, indent=4, ensure_ascii=False)
+# Localization Strings
+TRANSLATIONS = {
+    "en": {
+        "title": "AI Aim Assistant - Configuration",
+        "start_btn": "START ASSISTANT",
+        "stop_btn": "STOP ASSISTANT",
+        "status_stopped": "Status: Stopped",
+        "status_running": "Status: Running",
+        "toggle_aim_on": "Toggle Aim (ON)",
+        "toggle_aim_off": "Toggle Aim (OFF)",
+        "toggle_trigger_on": "Toggle Trigger (ON)",
+        "toggle_trigger_off": "Toggle Trigger (OFF)",
+        "tab_general": "General",
+        "tab_aim": "Aim Assist",
+        "tab_trigger": "Trigger Bot",
+        "tab_system": "System",
+        "config_title": "Configuration",
+        "save_settings": "Save Settings",
+        "load_settings": "Load Settings",
+        "model_settings": "Model Settings",
+        "model_path": "Model Path:",
+        "browse": "Browse",
+        "hotkeys": "Hotkeys",
+        "visuals": "Visuals",
+        "show_preview": "Show Preview Window",
+        "show_debug": "Show Detailed Debug Data",
+        "aim_params": "Aim Parameters",
+        "fov_radius": "FOV Radius (Lock Dist):",
+        "smoothing": "Smoothing Factor (Speed):",
+        "max_speed": "Max Move Speed:",
+        "jitter": "Mouse Jitter (Humanize):",
+        "aim_point": "Aim Point (Y-Axis Lock)",
+        "target_part": "Target Priority Part:",
+        "head_offset": "Head Offset (-0.5 to 0.5):",
+        "body_offset": "Body Offset (0.0 to 1.0):",
+        "trigger_settings": "Trigger Settings",
+        "enable_trigger": "Enable Trigger Bot",
+        "trigger_delay": "Trigger Delay (ms):",
+        "rcs_title": "Recoil Control System (RCS)",
+        "enable_rcs": "Enable Recoil Control",
+        "rcs_strength": "RCS Strength:",
+        "trigger_radius": "Trigger Radius (px):",
+        "burst_control": "Burst Control",
+        "enable_burst": "Enable Burst Mode",
+        "burst_shots": "Shots per Burst:",
+        "burst_interval": "Burst Interval (ms):",
+        "performance": "Performance",
+        "target_fps": "Target FPS:",
+        "detection_size": "Detection Size:",
+        "msg_saved": "Settings saved to config.json",
+        "msg_loaded": "Settings loaded. Please restart GUI or re-check tabs to see all changes.",
+        "err_model_not_found": "Model file not found:",
+        "err_save_failed": "Failed to save settings:",
+        "err_load_failed": "Failed to load settings:",
+        "lang_select": "Language:",
+        "validation_title": "Environment Check",
+        "validation_success": "Environment check passed.",
+        "validation_fail_model": "Critical: No model file (CS2.engine, CS2.pt, CS2.onnx) found in directory!",
+        "validation_fail_trigger": "Critical: trigger.py not found!",
+        "validation_warn_config": "Warning: config.json not found or invalid. Using defaults.",
+        "stopped_key": "Status: Stopped (Key Pressed)"
+    },
+    "zh-TW": {
+        "title": "AI 瞄準助手 - 設定",
+        "start_btn": "啟動助手",
+        "stop_btn": "停止助手",
+        "status_stopped": "狀態: 已停止",
+        "status_running": "狀態: 運行中",
+        "toggle_aim_on": "切換瞄準 (開啟)",
+        "toggle_aim_off": "切換瞄準 (關閉)",
+        "toggle_trigger_on": "切換扳機 (開啟)",
+        "toggle_trigger_off": "切換扳機 (關閉)",
+        "tab_general": "一般設定",
+        "tab_aim": "自瞄設定",
+        "tab_trigger": "扳機設定",
+        "tab_system": "系統設定",
+        "config_title": "設定檔操作",
+        "save_settings": "儲存設定",
+        "load_settings": "載入設定",
+        "model_settings": "模型設定",
+        "model_path": "模型路徑:",
+        "browse": "瀏覽",
+        "hotkeys": "快捷鍵",
+        "visuals": "視覺效果",
+        "show_preview": "顯示預覽視窗",
+        "show_debug": "顯示詳細除錯數據",
+        "aim_params": "瞄準參數",
+        "fov_radius": "FOV 半徑 (鎖定距離):",
+        "smoothing": "平滑係數 (速度):",
+        "max_speed": "最大移動速度:",
+        "jitter": "滑鼠抖動 (擬人化):",
+        "aim_point": "瞄準點 (Y軸鎖定)",
+        "target_part": "優先瞄準部位:",
+        "head_offset": "頭部偏移 (-0.5 到 0.5):",
+        "body_offset": "身體偏移 (0.0 到 1.0):",
+        "trigger_settings": "扳機設定",
+        "enable_trigger": "啟用自動扳機",
+        "trigger_delay": "觸發延遲 (ms):",
+        "rcs_title": "後座力控制系統 (RCS)",
+        "enable_rcs": "啟用後座力控制",
+        "rcs_strength": "RCS 強度:",
+        "trigger_radius": "觸發半徑 (px):",
+        "burst_control": "點射控制",
+        "enable_burst": "啟用點射模式",
+        "burst_shots": "每次點射發數:",
+        "burst_interval": "點射間隔 (ms):",
+        "performance": "效能設定",
+        "target_fps": "目標 FPS:",
+        "detection_size": "偵測尺寸:",
+        "msg_saved": "設定已儲存至 config.json",
+        "msg_loaded": "設定已載入。請重啟 GUI 或切換分頁以查看變更。",
+        "err_model_not_found": "找不到模型檔案:",
+        "err_save_failed": "儲存設定失敗:",
+        "err_load_failed": "載入設定失敗:",
+        "lang_select": "語言:",
+        "validation_title": "環境檢查",
+        "validation_success": "環境檢查通過。",
+        "validation_fail_model": "嚴重錯誤: 目錄中找不到模型檔案 (CS2.engine, CS2.pt, CS2.onnx)!",
+        "validation_fail_trigger": "嚴重錯誤: 找不到 trigger.py!",
+        "validation_warn_config": "警告: config.json 遺失或無效。使用預設值。",
+        "stopped_key": "狀態: 已停止 (按鍵觸發)",
+        "auto_tune": "自動優化設定",
+        "optimizing": "正在優化中...",
+        "optimization_complete": "優化完成！\n已根據您的硬體自動調整設定：\n\nCPU核心: {}\n記憶體: {:.1f} GB\nGPU: {}\n\n效能評級: {}",
+        "optimization_failed": "優化失敗"
+    }
+}
+
+CURRENT_LANG = "zh-TW" # Default to Traditional Chinese as per user preference
+
+def load_config_early():
+    global CURRENT_LANG
+    if os.path.exists("config.json"):
+        try:
+            with open("config.json", "r") as f:
+                data = json.load(f)
+                if "language" in data:
+                    CURRENT_LANG = data["language"]
+                # Update cfg values too
+                for key, val in data.items():
+                    if hasattr(cfg, key):
+                        setattr(cfg, key, val)
+        except Exception as e:
+            print(f"Error loading config early: {e}")
+
+# Call it immediately to set language and config before GUI creation
+load_config_early()
+
+def tr(key):
+    """Translate key to current language."""
+    return TRANSLATIONS.get(CURRENT_LANG, TRANSLATIONS["en"]).get(key, key)
+
+def get_system_specs():
+    """Detect basic system specifications for auto-tuning."""
+    specs = {
+        "cpu_cores": 4,
+        "ram_gb": 8.0,
+        "has_nvidia": False,
+        "gpu_name": "Unknown"
+    }
     
-    def load(self, filepath='config.json'):
-        if os.path.exists(filepath):
-            with open(filepath, 'r', encoding='utf-8') as f:
-                config_dict = json.load(f)
-                for key, value in config_dict.items():
-                    if hasattr(self, key):
-                        setattr(self, key, value)
+    # CPU Cores
+    try:
+        if os.cpu_count():
+            specs["cpu_cores"] = os.cpu_count()
+    except:
+        pass
+        
+    # RAM (Windows wmic)
+    try:
+        result = subprocess.run('wmic computersystem get TotalPhysicalMemory', capture_output=True, text=True, shell=True)
+        for line in result.stdout.splitlines():
+            if line.strip().isdigit():
+                bytes_ram = int(line.strip())
+                specs["ram_gb"] = round(bytes_ram / (1024**3), 1)
+                break
+    except:
+        pass
+        
+    # GPU
+    has_nvidia, gpu_msg = get_nvidia_gpu_status()
+    specs["has_nvidia"] = has_nvidia
+    specs["gpu_name"] = gpu_msg
+    
+    return specs
 
-# 全局配置
-cfg = Config()
-
-# ==================== 自動優化系統 ====================
-class AutoOptimizer:
-    @staticmethod
-    def detect_system():
-        """偵測系統規格"""
-        import subprocess
-        
-        specs = {
-            'cpu_cores': 4,
-            'ram_gb': 8.0,
-            'gpu_type': 'CPU',
-            'gpu_name': '未偵測到',
-            'has_nvidia': False
-        }
-        
-        # CPU 核心
+def check_and_install_packages():
+    """Check for required packages and install them if missing."""
+    required_packages = {
+        'cv2': 'opencv-python',
+        'numpy': 'numpy',
+        'mss': 'mss',
+        'win32api': 'pywin32',
+        'keyboard': 'keyboard',
+        'ultralytics': 'ultralytics'
+    }
+    
+    missing_packages = []
+    
+    print("Checking dependencies...")
+    for module_name, package_name in required_packages.items():
+        if importlib.util.find_spec(module_name) is None:
+            print(f"Missing module: {module_name} (Package: {package_name})")
+            missing_packages.append(package_name)
+    
+    if missing_packages:
+        print(f"Installing missing packages: {', '.join(missing_packages)}")
         try:
-            specs['cpu_cores'] = os.cpu_count() or 4
-        except:
-            pass
-        
-        # RAM
-        try:
-            if sys.platform == 'win32':
-                result = subprocess.run('wmic computersystem get TotalPhysicalMemory', 
-                                       capture_output=True, text=True, shell=True)
-                for line in result.stdout.splitlines():
-                    if line.strip().isdigit():
-                        specs['ram_gb'] = round(int(line.strip()) / (1024**3), 1)
-                        break
-        except:
-            pass
-        
-        # GPU
-        try:
-            # NVIDIA
-            result = subprocess.run('nvidia-smi -L', capture_output=True, text=True, shell=True)
-            if result.returncode == 0 and 'GPU' in result.stdout:
-                specs['has_nvidia'] = True
-                specs['gpu_type'] = 'NVIDIA'
-                # 提取 GPU 名稱
-                for line in result.stdout.splitlines():
-                    if 'GPU' in line:
-                        specs['gpu_name'] = line.split(':')[1].strip() if ':' in line else 'NVIDIA GPU'
-                        break
-        except:
-            pass
-        
-        # 如果沒偵測到 NVIDIA，嘗試偵測其他 GPU
-        if not specs['has_nvidia']:
+            # Use subprocess.check_call safely
+            subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing_packages)
+            print("All packages installed successfully.")
+            
+            # Show message box
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showinfo("Installation Complete", f"Installed: {', '.join(missing_packages)}\nPlease restart the application.")
+            root.destroy()
+            sys.exit(0) 
+            
+        except Exception as e:
+            print(f"Error installing packages: {e}")
+            # Try to show error in GUI if possible
             try:
-                result = subprocess.run('wmic path win32_VideoController get Name', 
-                                       capture_output=True, text=True, shell=True)
-                for line in result.stdout.splitlines():
-                    line = line.strip()
-                    if line and 'Name' not in line:
-                        specs['gpu_name'] = line
-                        if 'AMD' in line.upper() or 'RADEON' in line.upper():
-                            specs['gpu_type'] = 'AMD'
-                        elif 'INTEL' in line.upper():
-                            specs['gpu_type'] = 'Intel'
-                        break
+                root = tk.Tk()
+                root.withdraw()
+                messagebox.showerror("Installation Error", f"Failed to install packages.\nError: {e}\nPlease install manually: pip install {' '.join(missing_packages)}")
+                root.destroy()
             except:
                 pass
+            sys.exit(1)
+    else:
+        print("All dependencies satisfied.")
+        # Sanity import to catch DLL load failures and auto-repair where possible
+        def try_import(mod):
+            try:
+                import importlib
+                importlib.import_module(mod)
+                return True, ""
+            except Exception as err:
+                return False, str(err)
         
-        return specs
-    
-    @staticmethod
-    def calculate_performance_tier(specs):
-        """計算效能等級"""
-        score = 0
+        def fix_opencv_headless():
+            try:
+                subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "opencv-python"], check=False)
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "opencv-python-headless"])
+                r = tk.Tk(); r.withdraw()
+                messagebox.showinfo("Fix Applied", "Switched to opencv-python-headless to resolve DLL issues.\nPlease restart the application.")
+                r.destroy()
+                sys.exit(0)
+            except Exception as e:
+                r = tk.Tk(); r.withdraw()
+                messagebox.showerror("Fix Failed", f"Failed to switch to headless OpenCV.\nError: {e}\nPlease install Microsoft Visual C++ Redistributable (2015-2022) and retry.")
+                r.destroy()
+                sys.exit(1)
         
-        # CPU 評分（0-30）
-        if specs['cpu_cores'] >= 12:
-            score += 30
-        elif specs['cpu_cores'] >= 8:
-            score += 25
-        elif specs['cpu_cores'] >= 6:
-            score += 20
-        elif specs['cpu_cores'] >= 4:
-            score += 15
-        else:
-            score += 10
+        def run_pywin32_postinstall():
+            try:
+                subprocess.check_call([sys.executable, "-m", "pywin32_postinstall", "-install"])
+                r = tk.Tk(); r.withdraw()
+                messagebox.showinfo("Fix Applied", "Pywin32 post-install completed.\nPlease restart the application.")
+                r.destroy()
+                sys.exit(0)
+            except Exception as e:
+                r = tk.Tk(); r.withdraw()
+                messagebox.showerror("Fix Failed", f"Pywin32 post-install failed.\nError: {e}\nPlease reinstall pywin32 or install Microsoft Visual C++ Redistributable (2015-2022).")
+                r.destroy()
+                sys.exit(1)
         
-        # RAM 評分（0-30）
-        if specs['ram_gb'] >= 32:
-            score += 30
-        elif specs['ram_gb'] >= 16:
-            score += 25
-        elif specs['ram_gb'] >= 12:
-            score += 20
-        elif specs['ram_gb'] >= 8:
-            score += 15
-        else:
-            score += 10
-        
-        # GPU 評分（0-40）
-        if specs['has_nvidia']:
-            gpu_name = specs['gpu_name'].upper()
-            if '4090' in gpu_name or '4080' in gpu_name:
-                score += 40
-            elif '4070' in gpu_name or '4060' in gpu_name or '3090' in gpu_name or '3080' in gpu_name:
-                score += 35
-            elif '3070' in gpu_name or '3060' in gpu_name or '2080' in gpu_name:
-                score += 30
-            elif '2070' in gpu_name or '2060' in gpu_name or '1660' in gpu_name:
-                score += 25
-            else:
-                score += 20
-        elif specs['gpu_type'] == 'AMD':
-            score += 25
-        elif specs['gpu_type'] == 'Intel':
-            score += 15
-        else:
-            score += 5
-        
-        # 等級判定
-        if score >= 85:
-            return '極致', score
-        elif score >= 70:
-            return '高階', score
-        elif score >= 50:
-            return '中階', score
-        elif score >= 30:
-            return '入門', score
-        else:
-            return '低階', score
-    
-    @staticmethod
-    def apply_optimal_settings(tier, specs):
-        """根據效能等級應用最佳設定"""
-        if tier == '極致':
-            cfg.DETECTION_SIZE = 928
-            cfg.TARGET_FPS = 300
-            cfg.MAX_MOVE_SPEED = 350
-            cfg.SMOOTHING_FACTOR = 0.9
-            cfg.SKIP_FRAME_VISUALIZATION = True
-        
-        elif tier == '高階':
-            cfg.DETECTION_SIZE = 640
-            cfg.TARGET_FPS = 240
-            cfg.MAX_MOVE_SPEED = 300
-            cfg.SMOOTHING_FACTOR = 0.85
-            cfg.SKIP_FRAME_VISUALIZATION = True
-        
-        elif tier == '中階':
-            cfg.DETECTION_SIZE = 640
-            cfg.TARGET_FPS = 144
-            cfg.MAX_MOVE_SPEED = 250
-            cfg.SMOOTHING_FACTOR = 0.7
-            cfg.SKIP_FRAME_VISUALIZATION = True
-        
-        elif tier == '入門':
-            cfg.DETECTION_SIZE = 480
-            cfg.TARGET_FPS = 100
-            cfg.MAX_MOVE_SPEED = 200
-            cfg.SMOOTHING_FACTOR = 0.6
-            cfg.SKIP_FRAME_VISUALIZATION = True
-        
-        else:  # 低階
-            cfg.DETECTION_SIZE = 480
-            cfg.TARGET_FPS = 60
-            cfg.MAX_MOVE_SPEED = 150
-            cfg.SMOOTHING_FACTOR = 0.5
-            cfg.SKIP_FRAME_VISUALIZATION = True
+        checks = ["cv2", "numpy", "mss", "win32api", "keyboard", "ultralytics"]
+        for mod in checks:
+            ok, err = try_import(mod)
+            if not ok:
+                err_up = err.upper()
+                if mod == "cv2" and ("DLL LOAD" in err_up or "VCRUNTIME" in err_up or "FAILED TO LOAD" in err_up):
+                    fix_opencv_headless()
+                elif mod == "win32api" and ("DLL LOAD" in err_up or "FAILED TO LOAD" in err_up):
+                    run_pywin32_postinstall()
+                else:
+                    r = tk.Tk(); r.withdraw()
+                    messagebox.showerror("Dependency Error", f"Import failed for {mod}.\nError: {err}\nIf this is a DLL issue, please install Microsoft Visual C++ Redistributable (2015-2022) and restart.")
+                    r.destroy()
+                    sys.exit(1)
 
-# ==================== GUI 主視窗 ====================
-class AimSystemGUI:
+def get_nvidia_gpu_status():
+    """Detect if NVIDIA GPU is present on the system using multiple methods."""
+    print("Checking for NVIDIA GPU...")
+    
+    # Method 1: nvidia-smi (Most reliable if drivers are installed)
+    try:
+        # shell=True helps find the executable in path on Windows
+        result = subprocess.run("nvidia-smi -L", capture_output=True, text=True, shell=True)
+        if result.returncode == 0 and "GPU" in result.stdout:
+            return True, "NVIDIA GPU Detected (via nvidia-smi)"
+    except Exception:
+        pass
+
+    # Method 2: wmic (Standard Windows)
+    try:
+        # Use wmic with capture_output to handle encoding better (Python handles it)
+        result = subprocess.run('wmic path win32_VideoController get Name', capture_output=True, text=True, shell=True)
+        if "NVIDIA" in result.stdout.upper():
+            return True, "NVIDIA GPU Detected (via wmic)"
+    except Exception:
+        pass
+
+    # Method 3: PowerShell (Fallback)
+    try:
+        cmd = 'powershell "Get-WmiObject Win32_VideoController | Select-Object Name"'
+        result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+        if "NVIDIA" in result.stdout.upper():
+            return True, "NVIDIA GPU Detected (via PowerShell)"
+    except Exception:
+        pass
+        
+    return False, "No NVIDIA GPU Detected"
+
+def check_torch_installation():
+    """Check PyTorch installation and ensure CUDA support if GPU exists."""
+    try:
+        has_nvidia, gpu_msg = get_nvidia_gpu_status()
+        print(f"Hardware Check: {gpu_msg}")
+    except Exception as e:
+        print(f"Hardware Check Failed: {e}")
+        has_nvidia = False # Assume no NVIDIA if detection crashes hard
+    
+    need_install = False
+    is_cuda_available = False
+    
+    try:
+        import torch
+        is_cuda_available = torch.cuda.is_available()
+        print(f"Current PyTorch: {torch.__version__}, CUDA Available: {is_cuda_available}")
+        
+        if has_nvidia and not is_cuda_available:
+            print("⚠️ Warning: NVIDIA GPU detected but installed PyTorch is CPU-only.")
+            # Use a temporary root for messagebox since main root isn't created yet
+            root = tk.Tk()
+            root.withdraw()
+            response = messagebox.askyesno("Hardware Optimization", 
+                "NVIDIA GPU detected but current PyTorch does not support CUDA.\n"
+                "Do you want to reinstall PyTorch with CUDA support for better performance?",
+                parent=root)
+            root.destroy()
+            
+            if response:
+                need_install = True
+                try:
+                    subprocess.check_call([sys.executable, "-m", "pip", "uninstall", "-y", "torch", "torchvision", "torchaudio"])
+                except Exception:
+                    pass
+        
+    except ImportError:
+        print("PyTorch not found.")
+        need_install = True
+    except Exception as e:
+        print(f"Error checking torch: {e}")
+        # Continue without crashing if torch check fails, just assume we might need install if not found
+        pass
+
+    if need_install:
+        print("Installing optimized PyTorch...")
+        try:
+            if has_nvidia:
+                cmd_uninstall = [sys.executable, "-m", "pip", "uninstall", "-y", "torchaudio"]
+                try:
+                    subprocess.check_call(cmd_uninstall)
+                except Exception:
+                    pass
+                cmd = [sys.executable, "-m", "pip", "install", "torch", "torchvision",
+                       "--index-url", "https://download.pytorch.org/whl/cu121"]
+            else:
+                cmd_uninstall = [sys.executable, "-m", "pip", "uninstall", "-y", "torchaudio"]
+                try:
+                    subprocess.check_call(cmd_uninstall)
+                except Exception:
+                    pass
+                cmd = [sys.executable, "-m", "pip", "install", "torch", "torchvision"]
+                
+            print(f"Executing: {' '.join(cmd)}")
+            subprocess.check_call(cmd)
+            
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showinfo("Installation Complete", "PyTorch installed successfully.\nPlease restart the application.")
+            root.destroy()
+            sys.exit(0)
+        except Exception as e:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("Error", f"Failed to install PyTorch: {e}")
+            root.destroy()
+            sys.exit(1)
+
+# Run dependency check before importing trigger
+check_torch_installation() # Check Torch FIRST
+check_and_install_packages() # Then check others
+
+# Add current directory to path to ensure we can import trigger
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+try:
+    import trigger
+    from trigger import cfg
+except ImportError:
+    messagebox.showerror("Error", "Could not import trigger.py. Make sure it exists in the same directory.")
+    sys.exit(1)
+
+class GameGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("AI 瞄準系統控制面板 v4.0")
-        self.root.geometry("750x900")
-        self.root.resizable(False, False)
+        self.root.title(tr("title"))
+        self.root.geometry("600x800")
         
-        # 樣式
+        # Enhanced Detection on Startup
+        self.validate_environment()
+        
+        self.assistant = trigger.GameAssistant()
+        self.is_running = False
+        
+        # Style
         style = ttk.Style()
         style.theme_use('clam')
         
-        # 創建 UI
-        self.create_widgets()
-        
-        # 載入配置
-        if os.path.exists('config.json'):
-            cfg.load()
-            self.refresh_all_values()
-    
-    def create_widgets(self):
-        # 主容器
-        main_frame = ttk.Frame(self.root, padding="10")
+        # Main Container
+        main_frame = ttk.Frame(root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # 頂部按鈕區
-        top_frame = ttk.Frame(main_frame)
-        top_frame.pack(fill=tk.X, pady=(0, 10))
+        # Language Selector
+        lang_frame = ttk.Frame(main_frame)
+        lang_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(lang_frame, text=tr("lang_select")).pack(side=tk.LEFT)
+        self.lang_var = tk.StringVar(value="Traditional Chinese" if CURRENT_LANG == "zh-TW" else "English")
+        lang_cb = ttk.Combobox(lang_frame, textvariable=self.lang_var, 
+                               values=["English", "Traditional Chinese"], state="readonly", width=20)
+        lang_cb.pack(side=tk.LEFT, padx=5)
+        lang_cb.bind("<<ComboboxSelected>>", self.change_language)
         
-        ttk.Button(top_frame, text="🚀 自動優化設定", command=self.auto_optimize).pack(side=tk.LEFT, padx=5)
-        ttk.Button(top_frame, text="💾 保存配置", command=self.save_config).pack(side=tk.LEFT, padx=5)
-        ttk.Button(top_frame, text="📁 載入配置", command=self.load_config).pack(side=tk.LEFT, padx=5)
-        ttk.Button(top_frame, text="🔄 重置", command=self.reset_config).pack(side=tk.LEFT, padx=5)
-        
-        # 分頁
+        # Notebook (Tabs)
         self.notebook = ttk.Notebook(main_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True, pady=5)
         
-        self.create_main_tab()
+        # Create Tabs
+        self.create_general_tab()
         self.create_aim_tab()
         self.create_trigger_tab()
-        self.create_visual_tab()
-        self.create_advanced_tab()
+        self.create_system_tab()
         
-        # 底部控制按鈕
-        bottom_frame = ttk.Frame(main_frame)
-        bottom_frame.pack(fill=tk.X, pady=10)
+        # Control Buttons
+        control_frame = ttk.LabelFrame(main_frame, text="Control Panel", padding="10")
+        control_frame.pack(fill=tk.X, pady=10)
         
-        ttk.Button(bottom_frame, text="▶️ 啟動系統", command=self.start_system, 
-                  ).pack(fill=tk.X, ipady=10)
-    
-    def create_main_tab(self):
+        self.btn_start = ttk.Button(control_frame, text=tr("start_btn"), command=self.toggle_assistant)
+        self.btn_start.pack(fill=tk.X, ipady=5)
+        
+        self.status_label = ttk.Label(control_frame, text=tr("status_stopped"), foreground="red")
+        self.status_label.pack(pady=5)
+
+        # Manual Toggles Frame
+        toggle_frame = ttk.Frame(control_frame)
+        toggle_frame.pack(fill=tk.X, pady=5)
+        
+        # Manual Aim Toggle
+        self.btn_toggle_aim = ttk.Button(toggle_frame, text=tr("toggle_aim_off"), command=self.toggle_aim_manual)
+        self.btn_toggle_aim.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+        
+        # Manual Trigger Toggle
+        self.btn_toggle_trigger = ttk.Button(toggle_frame, text=tr("toggle_trigger_off"), command=self.toggle_trigger_manual)
+        self.btn_toggle_trigger.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+        
+        # Bind close event
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        
+        # Set callback for status updates from assistant
+        self.assistant.set_callback(self.update_status_from_thread)
+
+    def validate_environment(self):
+        """Check for critical files and environment state."""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # 1. Check trigger.py
+        if not os.path.exists(os.path.join(current_dir, "trigger.py")):
+            messagebox.showerror(tr("validation_title"), tr("validation_fail_trigger"))
+            self.root.after(100, lambda: self.btn_start.config(state="disabled"))
+            return False
+
+        # 2. Check Models
+        models = ["CS2.engine", "CS2.pt", "CS2.onnx"]
+        found_model = any(os.path.exists(os.path.join(current_dir, m)) for m in models)
+        if not found_model:
+            messagebox.showerror(tr("validation_title"), tr("validation_fail_model"))
+            self.root.after(100, lambda: self.btn_start.config(state="disabled"))
+            return False
+            
+        # 3. Check Config
+        if not os.path.exists(os.path.join(current_dir, "config.json")):
+            # Just a warning
+            messagebox.showwarning(tr("validation_title"), tr("validation_warn_config"))
+            
+        return True
+
+    def change_language(self, event=None):
+        """Handle language change selection."""
+        selection = self.lang_var.get()
+        global CURRENT_LANG
+        if selection == "English":
+            new_lang = "en"
+        else:
+            new_lang = "zh-TW"
+            
+        if new_lang != CURRENT_LANG:
+            CURRENT_LANG = new_lang
+            # Save to config immediately
+            self.save_settings()
+            messagebox.showinfo(tr("title"), "Language changed. Please restart the application to apply changes.\n語言已變更，請重啟程式以套用設定。")
+
+    def create_general_tab(self):
         tab = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(tab, text="主要設定")
+        self.notebook.add(tab, text=tr("tab_general"))
         
-        # 模型選擇
-        model_frame = ttk.LabelFrame(tab, text="模型設定", padding="10")
-        model_frame.pack(fill=tk.X, pady=5)
+        # Config Actions
+        cfg_frame = ttk.LabelFrame(tab, text=tr("config_title"), padding="10")
+        cfg_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(model_frame, text="模型路徑:").pack(anchor=tk.W)
+        btn_frame = ttk.Frame(cfg_frame)
+        btn_frame.pack(fill=tk.X)
+        ttk.Button(btn_frame, text=tr("save_settings"), command=self.save_settings).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text=tr("load_settings"), command=self.load_settings).pack(side=tk.LEFT, padx=5)
+
+        # Model Selection
+        lbl_frame = ttk.LabelFrame(tab, text=tr("model_settings"), padding="10")
+        lbl_frame.pack(fill=tk.X, pady=5)
         
-        path_frame = ttk.Frame(model_frame)
-        path_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(lbl_frame, text=tr("model_path")).pack(anchor=tk.W)
+        self.model_path_var = tk.StringVar(value=cfg.MODEL_PATH)
+        entry_model = ttk.Entry(lbl_frame, textvariable=self.model_path_var, width=50)
+        entry_model.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        ttk.Button(lbl_frame, text=tr("browse"), command=self.browse_model).pack(side=tk.RIGHT)
         
-        self.model_var = tk.StringVar(value=cfg.MODEL_PATH)
-        ttk.Entry(path_frame, textvariable=self.model_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        ttk.Button(path_frame, text="瀏覽", command=self.browse_model).pack(side=tk.RIGHT)
+        # Hotkeys
+        hk_frame = ttk.LabelFrame(tab, text=tr("hotkeys"), padding="10")
+        hk_frame.pack(fill=tk.X, pady=5)
         
-        # 快捷鍵
-        key_frame = ttk.LabelFrame(tab, text="快捷鍵設定", padding="10")
-        key_frame.pack(fill=tk.X, pady=5)
-        
-        self.create_key_row(key_frame, "瞄準開關:", "AIM_TOGGLE_KEY")
-        self.create_key_row(key_frame, "Trigger開關:", "TRIGGER_TOGGLE_KEY")
-        self.create_key_row(key_frame, "退出程式:", "EXIT_KEY")
-        
-        # 系統資訊
-        info_frame = ttk.LabelFrame(tab, text="系統資訊", padding="10")
-        info_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
-        self.info_text = tk.Text(info_frame, height=10, state='disabled', bg='#f0f0f0')
-        self.info_text.pack(fill=tk.BOTH, expand=True)
-        
-        ttk.Button(info_frame, text="🔍 檢測系統", command=self.show_system_info).pack(pady=5)
-    
-    def create_aim_tab(self):
-        tab = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(tab, text="瞄準設定")
-        
-        # 啟用開關
-        ttk.Checkbutton(tab, text="啟用自動瞄準", 
-                       variable=self.create_bool_var('AIM_ENABLED')).pack(anchor=tk.W, pady=5)
-        
-        # 瞄準高度
-        self.create_slider(tab, "瞄準高度 (0=頭, 1=腰)", "AIM_HEIGHT", 0.0, 1.0, 0.01)
-        
-        # 移動速度
-        self.create_slider(tab, "移動速度", "MAX_MOVE_SPEED", 50, 500, 10)
-        
-        # 平滑度
-        self.create_slider(tab, "平滑度 (越高越快)", "SMOOTHING_FACTOR", 0.1, 1.0, 0.05)
-        
-        # 人類抖動
-        self.create_slider(tab, "人類抖動", "MOUSE_JITTER", 0.0, 5.0, 0.1)
-        
-        # FOV
-        self.create_slider(tab, "鎖定範圍 (FOV)", "MAX_LOCK_DISTANCE", 50, 500, 10)
-    
-    def create_trigger_tab(self):
-        tab = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(tab, text="Trigger Bot")
-        
-        # 啟用開關
-        ttk.Checkbutton(tab, text="啟用 Trigger Bot", 
-                       variable=self.create_bool_var('ENABLE_TRIGGER_BOT')).pack(anchor=tk.W, pady=5)
-        
-        # 觸發延遲
-        self.create_slider(tab, "觸發延遲 (ms)", "TRIGGER_DELAY_MS", 0, 1000, 10)
-        
-        # 觸發半徑
-        self.create_slider(tab, "觸發半徑 (px)", "TRIGGER_RADIUS", 5, 50, 1)
-        
-        # 壓槍設定
-        rcs_frame = ttk.LabelFrame(tab, text="壓槍設定", padding="10")
-        rcs_frame.pack(fill=tk.X, pady=10)
-        
-        ttk.Checkbutton(rcs_frame, text="啟用後坐力補償", 
-                       variable=self.create_bool_var('RECOIL_COMPENSATION')).pack(anchor=tk.W)
-        
-        self.create_slider(rcs_frame, "壓槍強度", "RECOIL_STRENGTH", 0, 10, 1)
-    
-    def create_visual_tab(self):
-        tab = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(tab, text="視覺設定")
-        
-        vis_frame = ttk.LabelFrame(tab, text="顯示選項", padding="10")
+        self.create_entry_row(hk_frame, "Aim Toggle Key:", "AIM_TOGGLE_KEY")
+        self.create_entry_row(hk_frame, "Trigger Toggle Key:", "TRIGGER_TOGGLE_KEY")
+        self.create_entry_row(hk_frame, "Exit Key:", "EXIT_KEY")
+
+        # Visuals
+        vis_frame = ttk.LabelFrame(tab, text=tr("visuals"), padding="10")
         vis_frame.pack(fill=tk.X, pady=5)
         
-        # 注意：SKIP_FRAME_VISUALIZATION 是反向的
-        self.show_preview_var = tk.BooleanVar(value=not cfg.SKIP_FRAME_VISUALIZATION)
-        ttk.Checkbutton(vis_frame, text="顯示預覽視窗", variable=self.show_preview_var,
-                       command=lambda: setattr(cfg, 'SKIP_FRAME_VISUALIZATION', not self.show_preview_var.get())).pack(anchor=tk.W)
+        self.var_preview = tk.BooleanVar(value=not cfg.SKIP_FRAME_VISUALIZATION)
+        ttk.Checkbutton(vis_frame, text=tr("show_preview"), variable=self.var_preview, 
+                        command=self.update_config).pack(anchor=tk.W)
         
-        ttk.Checkbutton(vis_frame, text="顯示 FOV 圓圈", 
-                       variable=self.create_bool_var('SHOW_FOV_CIRCLE')).pack(anchor=tk.W)
-        
-        self.show_debug_var = tk.BooleanVar(value=not cfg.REDUCE_DEBUG_OUTPUT)
-        ttk.Checkbutton(vis_frame, text="顯示詳細數據", variable=self.show_debug_var,
-                       command=lambda: setattr(cfg, 'REDUCE_DEBUG_OUTPUT', not self.show_debug_var.get())).pack(anchor=tk.W)
-        
-        # 說明
-        info_text = """
-提示：
-• 關閉預覽視窗可提升 30-50% FPS
-• 建議調試時開啟，實戰時關閉
-• 關閉後仍會在終端顯示狀態
-        """
-        ttk.Label(tab, text=info_text, justify='left', background='#fffacd', 
-                 relief='solid', padding=10).pack(fill=tk.X, pady=10)
-    
-    def create_advanced_tab(self):
+        self.var_debug = tk.BooleanVar(value=not cfg.REDUCE_DEBUG_OUTPUT)
+        ttk.Checkbutton(vis_frame, text=tr("show_debug"), variable=self.var_debug, 
+                        command=self.update_config).pack(anchor=tk.W)
+
+    def create_aim_tab(self):
         tab = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(tab, text="進階設定")
+        self.notebook.add(tab, text=tr("tab_aim"))
         
-        # 效能設定
-        perf_frame = ttk.LabelFrame(tab, text="效能設定", padding="10")
-        perf_frame.pack(fill=tk.X, pady=5)
+        # Aim Settings
+        aim_frame = ttk.LabelFrame(tab, text=tr("aim_params"), padding="10")
+        aim_frame.pack(fill=tk.X, pady=5)
         
-        self.create_slider(perf_frame, "目標 FPS", "TARGET_FPS", 60, 500, 10)
-        self.create_slider(perf_frame, "偵測尺寸", "DETECTION_SIZE", 320, 928, 32)
+        # FOV (Aim Radius)
+        self.create_scale_row(aim_frame, tr("fov_radius"), "MAX_LOCK_DISTANCE", 50, 500, 10)
         
-        # 警告
-        warning_text = """
-⚠️ 注意：
-• 偵測尺寸越大越精準但越慢
-• 建議：480=快速, 640=平衡, 928=精準
-• 目標 FPS 設太高可能導致 CPU 占用過高
-        """
-        ttk.Label(tab, text=warning_text, justify='left', foreground='red',
-                 relief='solid', padding=10).pack(fill=tk.X, pady=10)
-    
-    def create_slider(self, parent, label, config_attr, min_val, max_val, step):
+        # Speed / Smoothing
+        self.create_scale_row(aim_frame, tr("smoothing"), "SMOOTHING_FACTOR", 0.01, 1.0, 0.01)
+        self.create_scale_row(aim_frame, tr("max_speed"), "MAX_MOVE_SPEED", 10, 500, 10)
+        
+        # Jitter
+        self.create_scale_row(aim_frame, tr("jitter"), "MOUSE_JITTER", 0, 20, 1)
+        
+        # Offsets (Y-Axis Lock)
+        offset_frame = ttk.LabelFrame(tab, text=tr("aim_point"), padding="10")
+        offset_frame.pack(fill=tk.X, pady=5)
+        
+        # Target Part Selector
+        part_frame = ttk.Frame(offset_frame)
+        part_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(part_frame, text=tr("target_part")).pack(side=tk.LEFT)
+        self.var_target_part = tk.StringVar(value=cfg.TARGET_PART)
+        part_cb = ttk.Combobox(part_frame, textvariable=self.var_target_part, 
+                               values=["HEAD", "NECK", "CHEST", "STOMACH"], state="readonly")
+        part_cb.pack(side=tk.LEFT, padx=5)
+        part_cb.bind("<<ComboboxSelected>>", lambda e: self.update_config())
+        
+        ttk.Label(offset_frame, text=tr("head_offset")).pack(anchor=tk.W)
+        self.create_scale_row(offset_frame, tr("head_offset"), "HEAD_AIM_OFFSET", -0.5, 0.5, 0.01)
+        
+        ttk.Label(offset_frame, text=tr("body_offset")).pack(anchor=tk.W)
+        self.create_scale_row(offset_frame, tr("body_offset"), "BODY_AIM_OFFSET", 0.0, 1.0, 0.01)
+
+    def create_trigger_tab(self):
+        tab = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(tab, text=tr("tab_trigger"))
+        
+        tb_frame = ttk.LabelFrame(tab, text=tr("trigger_settings"), padding="10")
+        tb_frame.pack(fill=tk.X, pady=5)
+        
+        # Enable/Disable
+        self.var_tb_enable = tk.BooleanVar(value=cfg.ENABLE_TRIGGER_BOT)
+        ttk.Checkbutton(tb_frame, text=tr("enable_trigger"), variable=self.var_tb_enable, 
+                        command=self.update_config).pack(anchor=tk.W, pady=5)
+        
+        # Delay
+        self.create_scale_row(tb_frame, tr("trigger_delay"), "TRIGGER_DELAY_MS", 0, 1000, 10)
+
+        # Recoil Control System (RCS)
+        rcs_frame = ttk.LabelFrame(tab, text=tr("rcs_title"), padding="10")
+        rcs_frame.pack(fill=tk.X, pady=5)
+        
+        self.var_rcs_enable = tk.BooleanVar(value=cfg.RECOIL_COMPENSATION)
+        ttk.Checkbutton(rcs_frame, text=tr("enable_rcs"), variable=self.var_rcs_enable,
+                        command=self.update_config).pack(anchor=tk.W)
+        
+        self.create_scale_row(rcs_frame, tr("rcs_strength"), "RECOIL_STRENGTH", 0, 20, 1)
+        
+        # Radius
+        self.create_scale_row(tb_frame, tr("trigger_radius"), "TRIGGER_RADIUS", 1, 100, 1)
+        
+        # Burst Mode
+        burst_frame = ttk.LabelFrame(tab, text=tr("burst_control"), padding="10")
+        burst_frame.pack(fill=tk.X, pady=5)
+        
+        self.var_burst = tk.BooleanVar(value=cfg.BURST_MODE)
+        ttk.Checkbutton(burst_frame, text=tr("enable_burst"), variable=self.var_burst, 
+                        command=self.update_config).pack(anchor=tk.W)
+        
+        self.create_scale_row(burst_frame, tr("burst_shots"), "BURST_SHOTS", 1, 10, 1)
+        self.create_scale_row(burst_frame, tr("burst_interval"), "BURST_INTERVAL_MS", 50, 1000, 10)
+
+    def create_system_tab(self):
+        tab = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(tab, text=tr("tab_system"))
+        
+        sys_frame = ttk.LabelFrame(tab, text=tr("performance"), padding="10")
+        sys_frame.pack(fill=tk.X, pady=5)
+        
+        self.create_scale_row(sys_frame, tr("target_fps"), "TARGET_FPS", 30, 500, 10)
+        self.create_scale_row(sys_frame, tr("detection_size"), "DETECTION_SIZE", 320, 1280, 32)
+
+    def create_scale_row(self, parent, label_text, config_attr, min_val, max_val, step):
         frame = ttk.Frame(parent)
-        frame.pack(fill=tk.X, pady=5)
+        frame.pack(fill=tk.X, pady=2)
         
-        ttk.Label(frame, text=label, width=25).pack(side=tk.LEFT)
+        lbl = ttk.Label(frame, text=f"{label_text}", width=25)
+        lbl.pack(side=tk.LEFT)
         
+        # Value var
         current_val = getattr(cfg, config_attr)
         var = tk.DoubleVar(value=current_val)
         
-        value_label = ttk.Label(frame, text=f"{current_val:.2f}" if step < 1 else f"{int(current_val)}", width=10)
-        value_label.pack(side=tk.RIGHT)
+        # Value label
+        val_lbl = ttk.Label(frame, text=f"{current_val:.2f}", width=8)
+        val_lbl.pack(side=tk.RIGHT)
         
         def on_change(val):
             float_val = float(val)
-            final_val = int(round(float_val)) if step >= 1 else round(float_val, 2)
+            # Round to step
+            if step >= 1:
+                final_val = int(round(float_val))
+            else:
+                final_val = round(float_val, 2)
+            
             setattr(cfg, config_attr, final_val)
-            value_label.config(text=str(final_val))
-        
+            val_lbl.config(text=str(final_val))
+            
+            # Special handling for DETECTION_SIZE (affects screen center)
+            if config_attr == "DETECTION_SIZE" or config_attr == "FOV_SIZE":
+                # Only if using FOV_SIZE separately, but typically they might be linked
+                pass
+                
         scale = ttk.Scale(frame, from_=min_val, to=max_val, variable=var, command=on_change)
         scale.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         
-        # 儲存引用以便後續更新
-        if not hasattr(self, 'sliders'):
-            self.sliders = {}
-        self.sliders[config_attr] = (var, value_label, scale)
-    
-    def create_key_row(self, parent, label, config_attr):
+        if not hasattr(self, "scales"):
+            self.scales = {}
+        self.scales[config_attr] = scale
+
+    def create_entry_row(self, parent, label_text, config_attr):
         frame = ttk.Frame(parent)
-        frame.pack(fill=tk.X, pady=5)
+        frame.pack(fill=tk.X, pady=2)
         
-        ttk.Label(frame, text=label, width=15).pack(side=tk.LEFT)
+        ttk.Label(frame, text=label_text, width=20).pack(side=tk.LEFT)
         
-        var = tk.StringVar(value=getattr(cfg, config_attr))
-        var.trace_add("write", lambda *args: setattr(cfg, config_attr, var.get()))
+        current_val = getattr(cfg, config_attr)
+        var = tk.StringVar(value=str(current_val))
         
-        ttk.Entry(frame, textvariable=var, width=10).pack(side=tk.LEFT, padx=5)
-    
-    def create_bool_var(self, config_attr):
-        var = tk.BooleanVar(value=getattr(cfg, config_attr))
-        var.trace_add("write", lambda *args: setattr(cfg, config_attr, var.get()))
-        return var
-    
+        def on_write(*args):
+            setattr(cfg, config_attr, var.get())
+            
+        var.trace_add("write", on_write)
+        
+        entry = ttk.Entry(frame, textvariable=var)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
     def browse_model(self):
-        filepath = filedialog.askopenfilename(
-            title="選擇模型檔案",
-            filetypes=[("YOLO 模型", "*.pt *.engine *.onnx"), ("所有檔案", "*.*")]
+        filename = filedialog.askopenfilename(
+            title="Select Model File",
+            filetypes=[("Model Files", "*.engine *.pt *.onnx"), ("All Files", "*.*")]
         )
-        if filepath:
-            self.model_var.set(filepath)
-            cfg.MODEL_PATH = filepath
-    
-    def auto_optimize(self):
-        """自動優化設定"""
-        # 顯示進度
-        progress_win = tk.Toplevel(self.root)
-        progress_win.title("自動優化")
-        progress_win.geometry("400x200")
-        progress_win.transient(self.root)
-        progress_win.grab_set()
-        
-        ttk.Label(progress_win, text="正在偵測系統規格...", font=('Arial', 12)).pack(pady=20)
-        progress_bar = ttk.Progressbar(progress_win, mode='indeterminate', length=300)
-        progress_bar.pack(pady=10)
-        progress_bar.start()
-        
-        def optimize():
-            # 偵測系統
-            specs = AutoOptimizer.detect_system()
-            tier, score = AutoOptimizer.calculate_performance_tier(specs)
-            
-            # 應用設定
-            AutoOptimizer.apply_optimal_settings(tier, specs)
-            
-            # 更新 UI
-            self.root.after(0, lambda: self.refresh_all_values())
-            
-            # 顯示結果
-            result_msg = f"""
-優化完成！
+        if filename:
+            self.model_path_var.set(filename)
+            cfg.MODEL_PATH = filename
+            self.refresh_controls_for_model()
 
-系統規格：
-• CPU: {specs['cpu_cores']} 核心
-• RAM: {specs['ram_gb']} GB
-• GPU: {specs['gpu_name']}
-
-效能評級: {tier} ({score}/100)
-
-已自動調整：
-• 偵測尺寸: {cfg.DETECTION_SIZE}
-• 目標 FPS: {cfg.TARGET_FPS}
-• 移動速度: {cfg.MAX_MOVE_SPEED}
-• 平滑度: {cfg.SMOOTHING_FACTOR}
-            """
-            
-            progress_win.destroy()
-            messagebox.showinfo("優化完成", result_msg)
+    def update_config(self):
+        # Update boolean toggles
+        cfg.SKIP_FRAME_VISUALIZATION = not self.var_preview.get()
+        cfg.REDUCE_DEBUG_OUTPUT = not self.var_debug.get()
+        cfg.ENABLE_TRIGGER_BOT = self.var_tb_enable.get()
+        cfg.BURST_MODE = self.var_burst.get()
+        cfg.RECOIL_COMPENSATION = self.var_rcs_enable.get()
+        cfg.TARGET_PART = self.var_target_part.get()
         
-        # 在後台執行
-        import threading
-        threading.Thread(target=optimize, daemon=True).start()
-    
-    def show_system_info(self):
-        """顯示系統資訊"""
-        specs = AutoOptimizer.detect_system()
-        tier, score = AutoOptimizer.calculate_performance_tier(specs)
-        
-        info = f"""
-系統資訊：
-━━━━━━━━━━━━━━━━━━━━━
-CPU 核心: {specs['cpu_cores']}
-記憶體: {specs['ram_gb']} GB
-GPU 類型: {specs['gpu_type']}
-GPU 名稱: {specs['gpu_name']}
-━━━━━━━━━━━━━━━━━━━━━
-效能評級: {tier} ({score}/100)
-━━━━━━━━━━━━━━━━━━━━━
+        # Update thread state if running
+        if self.is_running:
+            # If trigger bot is disabled via checkbox, force disable in assistant
+            if not cfg.ENABLE_TRIGGER_BOT:
+                self.assistant.toggle_trigger(False)
+                self.btn_toggle_trigger.config(text="Toggle Trigger (OFF)")
+            else:
+                 # If enabled via checkbox, update the internal flag, but don't auto-activate
+                 # unless it was already active? Let's just sync the config.
+                 pass
 
-建議設定：
-• 偵測尺寸: {640 if tier in ['高階', '中階'] else 480}
-• 目標 FPS: {300 if tier == '極致' else 240 if tier == '高階' else 144}
-        """
-        
-        self.info_text.config(state='normal')
-        self.info_text.delete(1.0, tk.END)
-        self.info_text.insert(1.0, info)
-        self.info_text.config(state='disabled')
-    
-    def refresh_all_values(self):
-        """刷新所有 UI 值"""
-        # 刷新滑桿
-        if hasattr(self, 'sliders'):
-            for attr, (var, label, scale) in self.sliders.items():
+    def save_settings(self):
+        """Save current configuration to JSON file"""
+        config_data = {}
+        # Get all attributes of Config that are not methods/internal
+        for attr in dir(cfg):
+            if not attr.startswith("__") and not callable(getattr(cfg, attr)):
                 val = getattr(cfg, attr)
-                var.set(val)
-                if isinstance(val, float):
-                    label.config(text=f"{val:.2f}")
-                else:
-                    label.config(text=str(val))
+                if isinstance(val, (int, float, str, bool)):
+                    config_data[attr] = val
         
-        # 刷新其他
-        self.model_var.set(cfg.MODEL_PATH)
-        self.show_preview_var.set(not cfg.SKIP_FRAME_VISUALIZATION)
-        self.show_debug_var.set(not cfg.REDUCE_DEBUG_OUTPUT)
-    
-    def save_config(self):
-        cfg.save()
-        messagebox.showinfo("成功", "配置已保存到 config.json")
-    
-    def load_config(self):
-        cfg.load()
-        self.refresh_all_values()
-        messagebox.showinfo("成功", "配置已載入")
-    
-    def reset_config(self):
-        if messagebox.askyesno("確認", "確定要重置為預設設定嗎？"):
-            global cfg
-            cfg = Config()
-            self.refresh_all_values()
-            messagebox.showinfo("成功", "已重置為預設設定")
-    
-    def start_system(self):
-        """啟動主系統"""
-        # 檢查模型
-        if not os.path.exists(cfg.MODEL_PATH):
-            messagebox.showerror("錯誤", f"找不到模型檔案:\n{cfg.MODEL_PATH}")
+        try:
+            import json
+            with open("config.json", "w") as f:
+                json.dump(config_data, f, indent=4)
+            messagebox.showinfo("Success", "Settings saved to config.json")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save settings: {e}")
+
+    def load_settings(self):
+        """Load configuration from JSON file"""
+        import json
+        if not os.path.exists("config.json"):
+            messagebox.showinfo("Info", "No config file found.")
+            return
+            
+        try:
+            with open("config.json", "r") as f:
+                config_data = json.load(f)
+            
+            # Update Config object
+            for key, val in config_data.items():
+                if hasattr(cfg, key):
+                    setattr(cfg, key, val)
+            
+            # Update Language Var (GUI only)
+            if "language" in config_data:
+                lang_code = config_data["language"]
+                if lang_code == "en":
+                    self.lang_var.set("English")
+                else:
+                    self.lang_var.set("Traditional Chinese")
+            
+            # Refresh GUI elements
+            self.model_path_var.set(cfg.MODEL_PATH)
+            self.var_preview.set(not cfg.SKIP_FRAME_VISUALIZATION)
+            self.var_debug.set(not cfg.REDUCE_DEBUG_OUTPUT)
+            self.var_tb_enable.set(cfg.ENABLE_TRIGGER_BOT)
+            self.var_burst.set(cfg.BURST_MODE)
+            self.var_rcs_enable.set(cfg.RECOIL_COMPENSATION)
+            self.var_target_part.set(cfg.TARGET_PART)
+            self.refresh_controls_for_model()
+            
+            # We need to refresh scales manually as they are bound to DoubleVars that are not directly linked to cfg until change
+            # But in create_scale_row, we use a new DoubleVar initialized with current val.
+            # To refresh properly, we might need to restart GUI or update all vars.
+            # Ideally, we should have stored references to vars.
+            # For now, let's just tell user to restart or re-open tabs.
+            # Actually, let's try to update at least the visible ones if we can.
+            
+            # Simpler: Just show message that settings loaded, some might need restart or re-opening tab
+            messagebox.showinfo("Success", "Settings loaded. Please restart GUI or re-check tabs to see all changes.")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load settings: {e}")
+
+    def toggle_aim_manual(self):
+        if not self.is_running:
             return
         
-        # 保存配置
-        cfg.save()
-        
-        # 顯示資訊
-        info_msg = f"""
-系統啟動成功！
+        # Current state is self.assistant.aim_enabled
+        new_state = not self.assistant.aim_enabled
+        self.assistant.toggle_aim(new_state)
+        self.update_toggle_buttons()
 
-快捷鍵：
-[{cfg.AIM_TOGGLE_KEY.upper()}] 開/關瞄準
-[{cfg.TRIGGER_TOGGLE_KEY.upper()}] 開/關 Trigger
-[{cfg.EXIT_KEY.upper()}] 退出
-
-配置：
-• 瞄準高度: {cfg.AIM_HEIGHT}
-• 移動速度: {cfg.MAX_MOVE_SPEED}
-• FOV: {cfg.MAX_LOCK_DISTANCE}
-• FPS: {cfg.TARGET_FPS}
-        """
+    def toggle_trigger_manual(self):
+        if not self.is_running:
+            return
+            
+        new_state = not self.assistant.trigger_enabled
+        self.assistant.toggle_trigger(new_state)
+        self.update_toggle_buttons()
         
-        messagebox.showinfo("啟動成功", info_msg)
-        
-        # TODO: 整合實際的瞄準系統代碼
-        print("系統已啟動")
-        print(f"配置: {cfg.__dict__}")
+    def update_toggle_buttons(self):
+        if self.assistant.aim_enabled:
+            self.btn_toggle_aim.config(text="Toggle Aim (ON)")
+        else:
+            self.btn_toggle_aim.config(text="Toggle Aim (OFF)")
+            
+        if self.assistant.trigger_enabled:
+            self.btn_toggle_trigger.config(text="Toggle Trigger (ON)")
+        else:
+            self.btn_toggle_trigger.config(text="Toggle Trigger (OFF)")
 
-# ==================== 主程式 ====================
+    def toggle_assistant(self):
+        if not self.is_running:
+            # Validate model
+            if not os.path.exists(cfg.MODEL_PATH):
+                messagebox.showerror("Error", f"Model file not found: {cfg.MODEL_PATH}")
+                return
+
+            # Start
+            self.update_config() # Ensure latest config
+            self.assistant.start()
+            self.is_running = True
+            self.btn_start.config(text="STOP ASSISTANT")
+            self.status_label.config(text="Status: Running", foreground="green")
+            
+            # Start status update loop
+            self.root.after(500, self.periodic_status_check)
+            
+        else:
+            # Stop
+            self.assistant.stop()
+            self.is_running = False
+            self.btn_start.config(text="START ASSISTANT")
+            self.status_label.config(text="Status: Stopped", foreground="red")
+            self.btn_toggle_aim.config(text="Toggle Aim (OFF)")
+            self.btn_toggle_trigger.config(text="Toggle Trigger (OFF)")
+
+    def periodic_status_check(self):
+        if self.is_running:
+            self.update_toggle_buttons()
+            self.root.after(500, self.periodic_status_check)
+
+    def update_status_from_thread(self, msg):
+        if msg == "stopped":
+            self.root.after(0, self.handle_stop_from_thread)
+
+    def handle_stop_from_thread(self):
+        self.is_running = False
+        self.btn_start.config(text="START ASSISTANT")
+        self.status_label.config(text="Status: Stopped (Key Pressed)", foreground="red")
+
+    def on_close(self):
+        if self.is_running:
+            self.assistant.stop()
+        self.root.destroy()
+    
+    def refresh_controls_for_model(self):
+        try:
+            ext = os.path.splitext(cfg.MODEL_PATH)[1].lower()
+        except Exception:
+            ext = ""
+        scale = getattr(self, "scales", {}).get("DETECTION_SIZE")
+        if scale:
+            if ext == ".engine":
+                scale.state(["disabled"])
+            else:
+                scale.state(["!disabled"])
+
 if __name__ == "__main__":
     root = tk.Tk()
-    app = AimSystemGUI(root)
+    app = GameGUI(root)
+    try:
+        app.refresh_controls_for_model()
+    except Exception:
+        pass
+    root.mainloop()
+    root = tk.Tk()
+    app = GameGUI(root)
     root.mainloop()
